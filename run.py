@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--anomaly_ratio', type=float, default=0.25, help='prior anomaly ratio (%)')
 
     # model define
+    parser.add_argument("--mode", type=str, choices=['regular', 'causal', 'acausal'], default="regular", help="mode of the model (just for TimesNet)")
     parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
     parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
     parser.add_argument('--enc_in', type=int, default=7, help='encoder input size')
@@ -106,6 +107,14 @@ if __name__ == '__main__':
 
     print('Args in experiment:')
     print(args)
+
+    # Transform string args
+    if args.mode == 'regular':
+        args.causal = None
+    elif args.mode == 'causal':
+        args.causal = True
+    elif args.mode == 'acausal':
+        args.causal = False
 
     if args.task_name == 'long_term_forecast':
         Exp = Exp_Long_Term_Forecast

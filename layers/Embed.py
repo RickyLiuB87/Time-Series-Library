@@ -24,6 +24,39 @@ class PositionalEmbedding(nn.Module):
 
     def forward(self, x):
         return self.pe[:, :x.size(1)]
+    
+
+class Chomp1d(nn.Module):
+    def __init__(self, chomp_size, causal=True):
+        super(Chomp1d, self).__init__()
+        self.chomp_size = chomp_size
+        self.causal = causal
+
+    def forward(self, x):
+        if self.causal:
+            return x[:, :, :-self.chomp_size].contiguous()
+        else:
+            return x[:, :, self.chomp_size:].contiguous()
+
+
+class TemporalTokenEmbedding(nn.Module):
+    def __init__(self, c_in, d_model, causal=True):
+        super(TemporalTokenEmbedding, self).__init__()
+        kernel_size = 3
+        padding = kernel_size - 1
+        chomp_size = padding # Chomp size is equal to the padding size to maintain causality
+        self.tokenConv = nn.Conv1d(in_channels=c_in, out_channels=d_model,
+                                    kernel_size=kernel_size, padding=padding, bias=False)
+        self.chomp1 = Chomp1d(chomp_size, causal=causal) 
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(
+                    m.weight, mode='fan_in', nonlinearity='leaky_relu')
+
+    def forward(self, x):
+        x = self.tokenConv(x.permute(0, 2, 1))
+        x = self.chomp1(x)  # Apply chomping to ensure causality
+        return x.transpose(1, 2)
 
 
 class TokenEmbedding(nn.Module):
@@ -107,10 +140,16 @@ class TimeFeatureEmbedding(nn.Module):
 
 
 class DataEmbedding(nn.Module):
-    def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1):
+    def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1, causal=None):
         super(DataEmbedding, self).__init__()
 
-        self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
+        if causal is None:
+            # regular token embedding
+            self.value_embedding = TokenEmbedding(c_in=c_in, d_model=d_model)
+        else:
+            # causal token embedding
+            self.value_embedding = TemporalTokenEmbedding(c_in=c_in, d_model=d_model, causal=causal)
+
         self.position_embedding = PositionalEmbedding(d_model=d_model)
         self.temporal_embedding = TemporalEmbedding(d_model=d_model, embed_type=embed_type,
                                                     freq=freq) if embed_type != 'timeF' else TimeFeatureEmbedding(

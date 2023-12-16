@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.fft
 from layers.Embed import DataEmbedding
-from layers.Conv_Blocks import Inception_Block_V1
+from layers.Conv_Blocks import Inception_Block_V1, Temporal_Inception_Block
 
 
 def FFT_for_Period(x, k=2):
@@ -21,17 +21,30 @@ def FFT_for_Period(x, k=2):
 class TimesBlock(nn.Module):
     def __init__(self, configs):
         super(TimesBlock, self).__init__()
+        self.causal = configs.causal
         self.seq_len = configs.seq_len
-        self.pred_len = configs.pred_len
+        self.pred_len = configs.pred_len if self.causal is None else 0
         self.k = configs.top_k
-        # parameter-efficient design
-        self.conv = nn.Sequential(
-            Inception_Block_V1(configs.d_model, configs.d_ff,
-                               num_kernels=configs.num_kernels),
-            nn.GELU(),
-            Inception_Block_V1(configs.d_ff, configs.d_model,
-                               num_kernels=configs.num_kernels)
-        )
+        
+        if self.causal is None:
+            # regular convolution
+            # parameter-efficient design
+            self.conv = nn.Sequential(
+                Inception_Block_V1(configs.d_model, configs.d_ff,
+                                   num_kernels=configs.num_kernels),
+                nn.GELU(),
+                Inception_Block_V1(configs.d_ff, configs.d_model,
+                                   num_kernels=configs.num_kernels)
+            )
+        else:
+            # causal convolution
+            self.conv = nn.Sequential(
+                Temporal_Inception_Block(configs.d_model, configs.d_ff,
+                                        num_kernels=configs.num_kernels, causal=self.causal),
+                nn.GELU(),
+                Temporal_Inception_Block(configs.d_ff, configs.d_model,
+                                        num_kernels=configs.num_kernels, causal=self.causal)
+            )
 
     def forward(self, x):
         B, T, N = x.size()
@@ -80,12 +93,17 @@ class Model(nn.Module):
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
+        self.causal = configs.causal
+
         self.model = nn.ModuleList([TimesBlock(configs)
                                     for _ in range(configs.e_layers)])
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
-                                           configs.dropout)
+                                           configs.dropout, causal=self.causal)
         self.layer = configs.e_layers
-        self.layer_norm = nn.LayerNorm(configs.d_model)
+
+        if self.causal is None:
+            self.layer_norm = nn.LayerNorm(configs.d_model)
+
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.predict_linear = nn.Linear(
                 self.seq_len, self.pred_len + self.seq_len)
@@ -101,6 +119,7 @@ class Model(nn.Module):
                 configs.d_model * configs.seq_len, configs.num_class)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
+        # Idea: normalization based on past values or remove it
         # Normalization from Non-stationary Transformer
         means = x_enc.mean(1, keepdim=True).detach()
         x_enc = x_enc - means
@@ -110,11 +129,26 @@ class Model(nn.Module):
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
-        enc_out = self.predict_linear(enc_out.permute(0, 2, 1)).permute(
-            0, 2, 1)  # align temporal dimension
+
+        # align temporal dimension
+        if self.causal is None:
+            enc_out = self.predict_linear(enc_out.permute(0, 2, 1)).permute(
+                0, 2, 1)  
+            
         # TimesNet
         for i in range(self.layer):
-            enc_out = self.layer_norm(self.model[i](enc_out))
+            if self.causal is None:
+                # regular convolution
+                enc_out = self.layer_norm(self.model[i](enc_out))
+            else:
+                # causal convolution
+                enc_out = self.model[i](enc_out)
+        
+        # align temporal dimension
+        if self.causal is not None:
+            enc_out = self.predict_linear(enc_out.permute(0, 2, 1)).permute(
+                0, 2, 1) 
+        
         # porject back
         dec_out = self.projection(enc_out)
 

@@ -1,0 +1,4 @@
+smape: {'Yearly': 193.239, 'Quarterly': 174.239, 'Monthly': 168.111, 'Others': 197.58, 'Average': 176.834}
+mape: {'Yearly': 98.241, 'Quarterly': 92.698, 'Monthly': 90.745, 'Others': 99.376, 'Average': 93.369}
+mase: {'Yearly': 32.469, 'Quarterly': 19.839, 'Monthly': 17.983, 'Others': 123.983, 'Average': 27.06}
+owa: {'Yearly': 9.997, 'Quarterly': 15.145, 'Monthly': 14.282, 'Others': 40.339, 'Average': 13.594}

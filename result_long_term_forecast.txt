@@ -1,3 +1,12 @@
 long_term_forecast_ETTh1_96_96_LSTM_ETTh1_ftM_sl96_ll48_pl96_dm16_nh8_el2_dl1_df32_fc3_ebtimeF_dtTrue_Exp_0  
 mse:1.1084239482879639, mae:0.8079835772514343
 
+long_term_forecast_Exchange_96_96_LSTM_custom_ftM_sl96_ll48_pl96_dm64_nh8_el2_dl1_df64_fc3_ebtimeF_dtTrue_Exp_0  
+mse:2.3358664512634277, mae:1.2820383310317993
+
+long_term_forecast_ili_36_24_LSTM_custom_ftM_sl36_ll18_pl24_dm768_nh8_el2_dl1_df768_fc3_ebtimeF_dtTrue_Exp_0  
+mse:6.856330394744873, mae:1.8296763896942139
+
+long_term_forecast_weather_96_96_LSTM_custom_ftM_sl96_ll48_pl96_dm32_nh8_el2_dl1_df32_fc3_ebtimeF_dtTrue_Exp_0  
+mse:0.4090728163719177, mae:0.45203903317451477
+
